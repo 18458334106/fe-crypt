@@ -1,0 +1,35 @@
+{
+  "name": "fe-crypt",
+  "version": "1.0.0",
+  "description": "前端源码（Vue/JS/TS）透明加密工具：文件原地加密，构建/开发时自动解密，程序照常运行",
+  "type": "module",
+  "bin": {
+    "fe-crypt": "src/cli.js"
+  },
+  "exports": {
+    ".": "./src/core.js",
+    "./core": "./src/core.js",
+    "./vite": "./src/vite.js",
+    "./webpack": "./src/webpack.cjs",
+    "./project": "./src/project.js"
+  },
+  "files": [
+    "src",
+    "README.md"
+  ],
+  "scripts": {
+    "test": "node --test test/unit.test.mjs",
+    "test:integration": "node test/integration-vite.mjs"
+  },
+  "engines": {
+    "node": ">=18.17"
+  },
+  "keywords": [
+    "vite-plugin",
+    "vue",
+    "encryption",
+    "aes-256-gcm",
+    "source-protection"
+  ],
+  "license": "MIT"
+}
