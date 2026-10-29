@@ -116,6 +116,19 @@ npm run dev      # 正常开发，源码在磁盘上是密文
 npm run build    # 正常构建
 ```
 
+配置文件的模块格式**不受限制**：`vite.config.ts`、ESM 的 `vite.config.js`，以及 CommonJS 的
+`vite.config.js` / `vite.config.cjs` 都可以。CommonJS 配置里这样写即可：
+
+```js
+// vite.config.js（项目没有 "type": "module"）
+const { feCrypt } = require('fe-crypt/vite')
+
+module.exports = { plugins: [feCrypt()] }
+```
+
+> 包的 `exports` 已按 `import` / `require` 分流：ESM 走 `src/vite.js`，CJS 走
+> `src/vite.cjs`（内部用动态 `import()` 复用同一份实现），不会重复计算密钥。
+
 ### 5. 需要改代码时还原
 
 ```bash
@@ -228,6 +241,12 @@ A：密文是单行封装，这是预期行为。改代码请先 `decrypt`，改
 **Q：会和 Source Map 冲突吗？**
 A：不会。插件返回 `map: null`，构建时基于解密后的代码重新生成 sourcemap（默认 `build.sourcemap=false`）。
 
+**Q：启动时报 `"fe-crypt/vite" resolved to an ESM file ... cannot be loaded by require`？**
+A：这是 Vite 把 CommonJS 的 `vite.config.js` 打包成 CJS，再用 `require()` 加载纯 ESM 插件
+导致的。**1.0.1 起已提供 CJS 入口**，把依赖升级到 1.0.1 或更高即可；升级后仍报错，通常是
+`node_modules` 里还留着旧版本，删掉 `node_modules/fe-crypt` 重装一次再重启 Vite。
+临时绕过：把配置改名为 `vite.config.mjs`，Vite 会按 ESM 加载。
+
 **Q：加密了 `.vue` 但插件没启用会怎样？**
 A：文件只剩一行注释，`plugin-vue` 会报 "At least one `<template>` or `<script>`" —— **快速失败**，不会静默产出坏页面。
 
@@ -261,10 +280,12 @@ fe-crypt/
 │  ├─ ops.js          encrypt / decrypt / status / verify
 │  ├─ cli.js          命令行入口
 │  ├─ prompt.js       隐藏输入密钥
-│  ├─ vite.js         Vite 插件
+│  ├─ vite.js         Vite 插件（ESM 实现）
+│  ├─ vite.cjs        Vite 插件的 CommonJS 入口（require 用）
 │  └─ webpack.cjs     webpack loader
 ├─ test/
 │  ├─ unit.test.mjs       单元 + CLI 测试（node --test）
+│  ├─ vite-cjs-config.mjs CommonJS vite.config.js 回归测试
 │  └─ integration-vite.mjs 真实 Vue3+Vite 端到端验证
 └─ demo/              可直接运行的 Vue3 + Vite 示例
 ```
@@ -274,9 +295,16 @@ fe-crypt/
 ## 自测
 
 ```bash
-npm test                     # 单元 / CLI 测试
+npm test                     # 单元 / CLI 测试（含 CJS 入口）
 cd demo && npm install
 node test/integration-vite.mjs   # 加密 → 构建 → dist 与加密前完全一致 → dev 正常 → 解密还原
+node test/vite-cjs-config.mjs    # CommonJS vite.config.js 下 require('fe-crypt/vite') 真实构建
+```
+
+`test/vite-cjs-config.mjs` 默认使用 `demo/node_modules/vite`；也可以指向任意 Vite 安装：
+
+```powershell
+$env:FE_CRYPT_VITE_PATH='D:\你的项目\node_modules\vite'; node test/vite-cjs-config.mjs
 ```
 
 端到端脚本验证的关键事实：

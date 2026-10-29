@@ -5,6 +5,7 @@ import fsp from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { spawnSync } from 'node:child_process'
+import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
 import {
   DEFAULT_KDF,
@@ -21,6 +22,7 @@ import { feCrypt } from '../src/vite.js'
 const here = path.dirname(fileURLToPath(import.meta.url))
 const cli = path.join(here, '..', 'src', 'cli.js')
 const KEY = 'test-key-正确-123'
+const requireCjs = createRequire(import.meta.url)
 
 function tmpdir(prefix = 'fe-crypt-') {
   return fs.mkdtempSync(path.join(os.tmpdir(), prefix))
@@ -126,6 +128,39 @@ test('Vite 插件 load 钩子透明解密 .vue / .ts', async () => {
   noKey.configResolved({ root })
   delete process.env.FE_CRYPT_KEY
   await assert.rejects(() => noKey.load.call({ warn() {} }, vueFile), /没有可用的密钥/)
+})
+
+test('require("fe-crypt/vite")：CommonJS 入口可用且与 ESM 入口同构', async () => {
+  // 自引用：走 package.json 的 exports，验证 require 条件真的解析到 .cjs
+  const cjsEntry = requireCjs('fe-crypt/vite')
+  assert.equal(typeof cjsEntry, 'function')
+  assert.equal(cjsEntry.feCrypt, cjsEntry)
+  assert.equal(cjsEntry.default, cjsEntry)
+
+  const esmPlugin = feCrypt({ silent: true })
+  const cjsPlugin = cjsEntry({ silent: true })
+  assert.equal(cjsPlugin.name, esmPlugin.name)
+  assert.equal(cjsPlugin.enforce, 'pre')
+
+  const hooks = (p) => Object.keys(p).filter((key) => typeof p[key] === 'function').sort()
+  assert.deepEqual(hooks(cjsPlugin), hooks(esmPlugin), 'CJS 外壳必须转发 ESM 插件的全部钩子')
+})
+
+test('require("fe-crypt/vite")：CJS 插件仍能透明解密', async () => {
+  const root = tmpdir()
+  const cfg = createConfig(KEY)
+  fs.mkdirSync(path.join(root, '.fecrypt'), { recursive: true })
+  fs.writeFileSync(path.join(root, '.fecrypt', 'config.json'), JSON.stringify(cfg))
+  const m = deriveMasterKey(KEY, Buffer.from(cfg.kdf.salt, 'base64'), cfg.kdf)
+
+  const source = `export const answer: number = 42\n`
+  const file = path.join(root, 'main.ts')
+  fs.writeFileSync(file, `${encryptSource(source, m)}\n`)
+
+  const plugin = requireCjs('fe-crypt/vite')({ root, key: KEY, silent: true })
+  await plugin.configResolved({ root })
+  const loaded = await plugin.load.call({ warn() {} }, `${file}?t=1700000000000`)
+  assert.equal(loaded.code, source)
 })
 
 test('CLI: init → encrypt → status → decrypt 全流程', async () => {

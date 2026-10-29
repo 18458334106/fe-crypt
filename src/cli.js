@@ -30,7 +30,7 @@ import {
 } from './ops.js'
 import { promptHidden } from './prompt.js'
 
-const CLI_VERSION = '1.0.0'
+const CLI_VERSION = '1.0.1'
 
 const tty = process.stdout.isTTY && !process.env.NO_COLOR
 const c = {
@@ -349,6 +349,9 @@ export default defineConfig({
 })
 `)
   console.log(c.dim('  密钥通过环境变量 FE_CRYPT_KEY、.fecrypt/key 或插件参数 { key } 提供。'))
+  console.log(
+    c.dim("  CommonJS 配置（没有 \"type\": \"module\"）：const { feCrypt } = require('fe-crypt/vite')"),
+  )
   console.log('')
   console.log(c.bold('webpack') + c.dim('  （vue.config.js / webpack.config.js）'))
   console.log(`
